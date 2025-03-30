@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sex Offender Registry Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .search-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .results-container {
+            margin-top: 20px;
+            display: none;
+        }
+        .results-container.visible {
+            display: block;
+        }
+        .offender-card {
+            background-color: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .offender-card img {
+            max-width: 150px;
+            border-radius: 4px;
+        }
+        .offender-info {
+            margin-top: 10px;
+        }
+        .offender-info p {
+            margin: 5px 0;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading.visible {
+            display: block;
+        }
+        .error-message {
+            color: #d93025;
+            margin-top: 10px;
+            display: none;
+        }
+        .error-message.visible {
+            display: block;
+        }
+        .results-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .results-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .error-section {
+            color: #d93025;
+            padding: 10px;
+            margin-bottom: 15px;
+            background-color: #ffeeed;
+            border-radius: 4px;
+        }
+        .offenders-container {
+            margin-top: 15px;
+        }
+        .confirmation-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+            display: none;
+        }
+        .confirmation-container.visible {
+            display: block;
+        }
+        .counselor-checkbox {
+            margin: 15px 0;
+        }
+        .counselor-checkbox label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .counselor-checkbox input {
+            width: auto;
+            margin-right: 10px;
+        }
+        .confirm-button {
+            background-color: #34a853;
+            width: 100%;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .confirm-button:hover {
+            background-color: #2e8b47;
+        }
+        .confirm-button:disabled {
+            background-color: #ccc;
+        }
+        .confirmation-message {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #d4edda;
+            color: #155724;
+            border-radius: 4px;
+            display: none;
+        }
+        .confirmation-message.visible {
+            display: block;
+        }
+        .retry-container {
+            background-color: #fff3e0;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ffcc80;
+            margin: 20px 0;
+            text-align: center;
+            display: none;
+        }
+        .retry-button {
+            background-color: #fbbc05;
+            padding: 12px 25px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .retry-button:hover {
+            background-color: #f9a825;
+        }
+        .retry-message {
+            margin-top: 10px;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="search-container">
+        <h1>Sex Offender Registry Search</h1>
+        <p>Search both the National Sex Offender Public Website (NSOPW) and Utah Child Abuse Offender Registry (UCAOR).</p>
+        
+        <form id="searchForm">
+            <div class="form-group">
+                <label for="firstName">First Name:</label>
+                <input type="text" id="firstName" required>
+            </div>
+            <div class="form-group">
+                <label for="lastName">Last Name:</label>
+                <input type="text" id="lastName" required>
+            </div>
+            <button type="submit" id="searchButton">Search Both Registries</button>
+        </form>
+    </div>
+
+    <div class="loading" id="loadingIndicator">
+        Searching... Please wait.
+    </div>
+
+    <div class="error-message" id="errorMessage"></div>
+    
+    <div class="retry-container" id="retryContainer">
+        <p>If there was a problem with the search. Please try again.</p>
+        <button id="retryButton" class="retry-button">Retry Search</button>
+        <p class="retry-message">Click to retry the search for this member.</p>
+    </div>
+
+    <div class="results-container" id="resultsContainer">
+        <h2>Search Results</h2>
+        <div id="resultsList"></div>
+    </div>
+
+    <div class="confirmation-container" id="confirmationContainer">
+        <h2>Counselor Confirmation</h2>
+        <p>Please have both counselors review these results and confirm below:</p>
+        
+        <div class="counselor-checkbox">
+            <label>
+                <input type="checkbox" id="positiveResults"> Positive match results were found in the search
+            </label>
+        </div>
+        
+        <div class="counselor-checkbox">
+            <label>
+                <input type="checkbox" id="counselor1"> First Counselor has reviewed results
+            </label>
+        </div>
+        
+        <div class="counselor-checkbox">
+            <label>
+                <input type="checkbox" id="counselor2"> Second Counselor has reviewed results
+            </label>
+        </div>
+        
+        <button id="confirmButton" class="confirm-button" disabled>Confirm Results</button>
+        
+        <div class="confirmation-message" id="confirmationMessage">
+            Results have been confirmed by both counselors.
+        </div>
+    </div>
+
+    <script type="module" src="search.js"></script>
+</body>
+</html> 

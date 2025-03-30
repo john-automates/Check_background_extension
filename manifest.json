@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Sex Offender Registry Checker",
+  "version": "1.0",
+  "description": "Check names against sex offender registries",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://lcr.churchofjesuschrist.org/*",
+    "https://www.icrimewatch.net/*",
+    "https://nsopw.gov/*",
+    "https://nsopw-api.ojp.gov/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://lcr.churchofjesuschrist.org/*"],
+      "js": ["lcr-content.js"]
+    },
+    {
+      "matches": ["https://www.icrimewatch.net/*", "https://nsopw.gov/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "member-list.html",
+        "search.html",
+        "results.html",
+        "batch-process.html"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+} 
