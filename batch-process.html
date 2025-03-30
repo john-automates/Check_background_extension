@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Batch Member Processing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .button-container {
+            margin: 20px 0;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button#stopBatchProcess {
+            background-color: #d93025;
+        }
+        button#stopBatchProcess:hover {
+            background-color: #b7261f;
+        }
+        button#resetProcessedMembers {
+            background-color: #fbbc05;
+        }
+        button#resetProcessedMembers:hover {
+            background-color: #e8a800;
+        }
+        #progressContainer {
+            margin: 20px 0;
+            display: none;
+        }
+        progress {
+            width: 100%;
+            height: 20px;
+        }
+        .status-box {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .info-text {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .member-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f0f8ff;
+            border-radius: 4px;
+            border-left: 4px solid #4285f4;
+        }
+        .additional-options {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .processed-count {
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Batch Member Processing</h1>
+        <p class="info-text">
+            This tool allows you to automatically process all members through the sex offender registry check. 
+            Each member will open in a new tab for counselor review. The counselors must review 
+            and confirm each search result before moving to the next member.
+        </p>
+        
+        <div class="status-box">
+            <div id="batchStatus">Ready to start batch processing.</div>
+            <div id="progressContainer">
+                <div class="member-info">
+                    <strong>Current member:</strong> <span id="currentMember">...</span>
+                </div>
+                <p><strong>Progress:</strong></p>
+                <progress id="progressBar" value="0" max="100"></progress>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <button id="startBatchProcess">Start Batch Processing</button>
+            <button id="stopBatchProcess">Stop Processing</button>
+        </div>
+        
+        <p class="info-text">
+            <strong>How it works:</strong><br>
+            1. Click "Start Batch Processing" to begin<br>
+            2. Each member will open in a new tab one by one<br>
+            3. Two counselors must review and confirm the results for each member<br>
+            4. After confirmation, the process will automatically move to the next member<br>
+            5. You can stop the process at any time by clicking "Stop Processing"
+        </p>
+        
+        <div class="additional-options">
+            <h3>Additional Options</h3>
+            <div class="processed-count" id="processedCount">Already processed: 0 members</div>
+            <button id="resetProcessedMembers">Reset Processed Members</button>
+            <button id="exportReport">Export Full Report</button>
+            <p class="info-text">
+                This will clear the list of already processed members, allowing you to restart batch processing from the beginning.
+            </p>
+            <p class="info-text">
+                The Export Full Report button will generate a CSV file containing all member check results, including names, dates checked, search results from both registries, and confirmation status by counselors. This report can be printed for your records or imported into Excel or other spreadsheet programs.
+            </p>
+        </div>
+    </div>
+    
+    <script src="batch-process.js" type="module"></script>
+</body>
+</html> 

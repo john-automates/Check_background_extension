@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Imported Members List</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 2px solid #4285f4;
+      padding-bottom: 10px;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .stats {
+      background-color: #f8f9fa;
+      padding: 10px 15px;
+      border-radius: 4px;
+      border: 1px solid #e9ecef;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background-color: #3367d6;
+    }
+    button.clear-btn {
+      background-color: #ea4335;
+    }
+    button.clear-btn:hover {
+      background-color: #d33426;
+    }
+    .members-container {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .members-header {
+      background-color: #f1f1f1;
+      padding: 12px 15px;
+      display: grid;
+      grid-template-columns: 60px 1fr 1fr;
+      font-weight: bold;
+      border-bottom: 2px solid #ddd;
+    }
+    .members-list {
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .member-item {
+      display: grid;
+      grid-template-columns: 60px 1fr 1fr;
+      padding: 12px 15px;
+      border-bottom: 1px solid #eee;
+    }
+    .member-item:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    .member-item:hover {
+      background-color: #f1f8ff;
+    }
+    .empty-state {
+      padding: 50px 20px;
+      text-align: center;
+      color: #666;
+    }
+    .confirmDialog {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+    .confirmDialog-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      width: 400px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .dialog-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .dialog-buttons button {
+      min-width: 100px;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Imported Members List</h1>
+  
+  <div class="controls">
+    <div class="stats">
+      <span id="memberCount">0 members imported</span>
+    </div>
+    <div>
+      <button id="backButton">Back to Checker</button>
+      <button id="clearMembers" class="clear-btn">Clear All Members</button>
+    </div>
+  </div>
+  
+  <div class="members-container">
+    <div class="members-header">
+      <div>#</div>
+      <div>Last Name</div>
+      <div>First Name</div>
+    </div>
+    <div class="members-list" id="membersList">
+      <!-- Members will be populated here -->
+      <div class="empty-state">No members imported yet</div>
+    </div>
+  </div>
+  
+  <div id="confirmDialog" class="confirmDialog">
+    <div class="confirmDialog-content">
+      <h3>Confirm Deletion</h3>
+      <p>Are you sure you want to clear all imported members? This cannot be undone.</p>
+      <div class="dialog-buttons">
+        <button id="cancelClear">Cancel</button>
+        <button id="confirmClear" class="clear-btn">Clear All</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="member-list.js"></script>
+</body>
+</html> 
