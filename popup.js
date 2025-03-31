@@ -48,9 +48,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Handle Get Member List button click
   getMemberListButton.addEventListener('click', function() {
-    // Open the LCR members with callings page in a new tab
+    // Open the LCR member list page in a new tab
     chrome.tabs.create({
-      url: 'https://lcr.churchofjesuschrist.org/orgs/members-with-callings?lang=eng'
+      url: 'https://lcr.churchofjesuschrist.org/records/member-list?lang=eng'
     });
   });
   

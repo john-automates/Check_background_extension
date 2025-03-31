@@ -115,12 +115,29 @@ function startBatchProcessing() {
   // Reset the tracking set
   processedMembers = new Set();
   
-  // Load previously processed members
-  chrome.storage.local.get(['processedMemberNames'], function(data) {
+  // Load previously processed members and check for paused state
+  chrome.storage.local.get(['processedMemberNames', 'batchProcessing'], function(data) {
     // If we have previously processed members, add them to our set
     if (data.processedMemberNames && Array.isArray(data.processedMemberNames)) {
       data.processedMemberNames.forEach(name => processedMembers.add(name.toLowerCase()));
       updateProcessedMembersCount();
+    }
+    
+    // Check if there's a paused state
+    if (data.batchProcessing && data.batchProcessing.isPaused) {
+      if (confirm(`Batch processing was paused at ${data.batchProcessing.pausedAt.member}.\nWould you like to resume from where you left off?`)) {
+        // Resume from paused state
+        currentMemberIndex = data.batchProcessing.pausedAt.index;
+        if (statusDisplay) statusDisplay.textContent = `Resuming from ${data.batchProcessing.pausedAt.member}...`;
+      } else {
+        // Clear paused state and start from beginning
+        chrome.storage.local.set({
+          'batchProcessing': {
+            isActive: true,
+            isPaused: false
+          }
+        });
+      }
     }
     
     // Now load the members to process
@@ -196,6 +213,14 @@ function stopBatchProcessing() {
   if (statusDisplay) statusDisplay.textContent = 'Processing stopped by user.';
   if (startButton) startButton.disabled = false;
   if (stopButton) stopButton.style.display = 'none';
+  
+  // Clear paused state when manually stopped
+  chrome.storage.local.set({
+    'batchProcessing': {
+      isActive: false,
+      isPaused: false
+    }
+  });
 }
 
 // Process the next member in the list
@@ -208,71 +233,101 @@ function processNextMember() {
   const member = membersList[currentMemberIndex];
   const fullName = `${member.firstName} ${member.lastName}`.toLowerCase();
   
-  // Check if this member has already been processed
-  if (processedMembers.has(fullName)) {
-    // Skip this member and move to the next one
-    console.log(`Skipping already processed member: ${member.firstName} ${member.lastName}`);
-    currentMemberIndex++;
+  // Check if this member has already been processed and confirmed
+  chrome.storage.local.get(null, function(data) {
+    const processed = data.processedMemberNames || [];
     
-    // Update progress bar
+    // Check all search results for this member's confirmation
+    let isConfirmed = false;
+    for (const key in data) {
+      if (key.startsWith('search_')) {
+        const searchResult = data[key];
+        if (searchResult.searchedName && 
+            searchResult.searchedName.toLowerCase() === fullName &&
+            searchResult.confirmed &&
+            searchResult.confirmed.confirmedBy &&
+            searchResult.confirmed.confirmedBy.counselor1 &&
+            searchResult.confirmed.confirmedBy.counselor2) {
+          isConfirmed = true;
+          break;
+        }
+      }
+    }
+    
+    // If member is in processed list but not confirmed, we need to process them again
+    if (processed.includes(fullName) && !isConfirmed) {
+      console.log(`Member ${fullName} was processed but not confirmed. Processing again...`);
+      processedMembers.delete(fullName); // Remove from current session's processed set
+      
+      // Remove from processed members list
+      const updatedProcessed = processed.filter(name => name.toLowerCase() !== fullName);
+      chrome.storage.local.set({ 'processedMemberNames': updatedProcessed });
+      updateProcessedMembersCount();
+    }
+    
+    // If member is confirmed, skip them
+    if (isConfirmed) {
+      console.log(`Skipping confirmed member: ${member.firstName} ${member.lastName}`);
+      currentMemberIndex++;
+      
+      // Update progress bar
+      const progressBar = document.getElementById('progressBar');
+      if (progressBar) progressBar.value = currentMemberIndex;
+      
+      // Process the next member
+      processNextMember();
+      return;
+    }
+    
+    // If we get here, we need to process this member
+    const statusDisplay = document.getElementById('batchStatus');
     const progressBar = document.getElementById('progressBar');
-    if (progressBar) progressBar.value = currentMemberIndex;
+    const currentMemberDisplay = document.getElementById('currentMember');
     
-    // Process the next member
-    processNextMember();
-    return;
-  }
-  
-  const statusDisplay = document.getElementById('batchStatus');
-  const progressBar = document.getElementById('progressBar');
-  const currentMemberDisplay = document.getElementById('currentMember');
-  
-  // Update UI
-  if (statusDisplay) statusDisplay.textContent = `Processing ${currentMemberIndex + 1} of ${membersList.length}`;
-  if (progressBar) progressBar.value = currentMemberIndex + 1;
-  if (currentMemberDisplay) currentMemberDisplay.textContent = `${member.firstName} ${member.lastName}`;
-  
-  // Add to processed members set to prevent duplicates in the current session
-  processedMembers.add(fullName);
-  
-  // Save processed members to storage
-  chrome.storage.local.get(['processedMemberNames'], function(data) {
-    let processed = data.processedMemberNames || [];
+    // Update UI
+    if (statusDisplay) statusDisplay.textContent = `Processing ${currentMemberIndex + 1} of ${membersList.length}`;
+    if (progressBar) progressBar.value = currentMemberIndex + 1;
+    if (currentMemberDisplay) currentMemberDisplay.textContent = `${member.firstName} ${member.lastName}`;
+    
+    // Add to processed members set to prevent duplicates in the current session
+    processedMembers.add(fullName);
+    
+    // Save processed members to storage
     if (!processed.includes(fullName)) {
       processed.push(fullName);
       chrome.storage.local.set({ 'processedMemberNames': processed });
       updateProcessedMembersCount();
     }
-  });
-  
-  // Open the search page with the member's name
-  chrome.tabs.create({
-    url: chrome.runtime.getURL('search.html'),
-    active: true
-  }, function(tab) {
-    // Store search parameters for the member
-    chrome.storage.local.set({
-      'advancedSearchParams': {
-        firstName: member.firstName,
-        lastName: member.lastName,
-        searchType: 'batch',
-        batchIndex: currentMemberIndex,
-        totalMembers: membersList.length,
-        autoSearch: true
-      }
-    });
     
-    // Store the batch processing state
-    chrome.storage.local.set({
-      'batchProcessing': {
-        isActive: true,
-        currentIndex: currentMemberIndex,
-        totalMembers: membersList.length
-      }
+    // Open the search page with the member's name
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('search.html'),
+      active: true
+    }, function(tab) {
+      // Store search parameters for the member
+      chrome.storage.local.set({
+        'advancedSearchParams': {
+          firstName: member.firstName,
+          lastName: member.lastName,
+          searchType: 'batch',
+          batchIndex: currentMemberIndex,
+          totalMembers: membersList.length,
+          autoSearch: true
+        }
+      });
+      
+      // Store the batch processing state
+      chrome.storage.local.set({
+        'batchProcessing': {
+          isActive: true,
+          currentIndex: currentMemberIndex,
+          totalMembers: membersList.length
+        }
+      });
+      
+      // Move to the next member for next iteration
+      currentMemberIndex++;
     });
-    
-    // Move to the next member for next iteration
-    currentMemberIndex++;
   });
 }
 
@@ -289,10 +344,11 @@ function completeProcessing() {
   if (startButton) startButton.disabled = false;
   if (stopButton) stopButton.style.display = 'none';
   
-  // Store the batch processing state as inactive
+  // Store the batch processing state as inactive and clear paused state
   chrome.storage.local.set({
     'batchProcessing': {
-      isActive: false
+      isActive: false,
+      isPaused: false
     }
   });
   

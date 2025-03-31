@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <h3 style="margin-top: 0; color: #004085;">Batch Processing Mode</h3>
         <p>Currently processing: <span id="currentBatchMember">...</span></p>
         <p>Progress: <span id="batchProgress">...</span></p>
+        <button id="pauseBatchProcess" style="margin-top: 10px; padding: 8px 16px; background-color: #ffc107; color: #000; border: none; border-radius: 4px; cursor: pointer;">Pause Processing</button>
     `;
     document.querySelector('.search-container').insertBefore(batchInfoContainer, searchForm);
     
@@ -430,17 +431,59 @@ document.addEventListener('DOMContentLoaded', function() {
         const ucaorSection = document.createElement('div');
         ucaorSection.className = 'results-section ucaor-results';
         
+        // Create the UCAOR URL
+        const ucaorUrl = `https://www.icrimewatch.net/results.php?AgencyID=56564&SubmitNameSearch=1&OfndrLast=${encodeURIComponent(results.lastName || '')}&OfndrFirst=${encodeURIComponent(results.firstName || '')}&OfndrCity=`;
+        
         ucaorSection.innerHTML = `
             <h3>UCAOR Search Results</h3>
             <p>${results.results}</p>
+            <p>To view details or perform a manual search, visit the <a href="${ucaorUrl}" target="_blank">Utah Sex Offender Registry</a>.</p>
         `;
         
-        if (results.offenderCount > 0) {
-            ucaorSection.innerHTML += `
-                <p>To view details, visit the <a href="${results.url}" target="_blank">Utah Sex Offender Registry</a>.</p>
-            `;
-        }
-        
         resultsList.appendChild(ucaorSection);
+    }
+
+    // Add pause button functionality
+    const pauseButton = document.getElementById('pauseBatchProcess');
+    if (pauseButton) {
+        pauseButton.addEventListener('click', function() {
+            // Store the current state
+            chrome.storage.local.get('batchProcessing', function(data) {
+                if (data.batchProcessing) {
+                    // Update the batch processing state to paused
+                    chrome.storage.local.set({
+                        'batchProcessing': {
+                            ...data.batchProcessing,
+                            isPaused: true,
+                            pausedAt: {
+                                member: `${lastSearchParams.firstName} ${lastSearchParams.lastName}`,
+                                index: lastSearchParams.batchIndex,
+                                timestamp: new Date().toISOString()
+                            }
+                        }
+                    }, function() {
+                        // Update the button text
+                        pauseButton.textContent = 'Processing Paused';
+                        pauseButton.style.backgroundColor = '#ffc107';
+                        pauseButton.disabled = true;
+                        
+                        // Show a message to the user
+                        const statusMessage = document.createElement('div');
+                        statusMessage.style.marginTop = '10px';
+                        statusMessage.style.padding = '10px';
+                        statusMessage.style.backgroundColor = '#fff3cd';
+                        statusMessage.style.border = '1px solid #ffeeba';
+                        statusMessage.style.borderRadius = '4px';
+                        statusMessage.style.color = '#856404';
+                        statusMessage.innerHTML = `
+                            <p><strong>Processing Paused</strong></p>
+                            <p>You can close this tab and continue later from where you left off.</p>
+                            <p>Current member: ${lastSearchParams.firstName} ${lastSearchParams.lastName}</p>
+                        `;
+                        batchInfoContainer.appendChild(statusMessage);
+                    });
+                }
+            });
+        });
     }
 }); 

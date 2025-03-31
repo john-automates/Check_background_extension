@@ -24,7 +24,10 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://lcr.churchofjesuschrist.org/*"],
+      "matches": [
+        "https://lcr.churchofjesuschrist.org/records/member-list*",
+        "https://lcr.churchofjesuschrist.org/orgs/members-with-callings*"
+      ],
       "js": ["lcr-content.js"]
     },
     {

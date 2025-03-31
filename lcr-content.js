@@ -1,8 +1,8 @@
 // Wait for the page to fully load
 window.addEventListener('load', function() {
-  // Check if we're on the members with callings page
-  if (window.location.href.includes('lcr.churchofjesuschrist.org/orgs/members-with-callings')) {
-    console.log('LCR Members page detected - adding import button');
+  // Check if we're on the member list page
+  if (window.location.href.includes('lcr.churchofjesuschrist.org/records/member-list')) {
+    console.log('LCR Member List page detected - adding import button');
     
     // Create a button and add it to the page
     const importButton = document.createElement('button');
@@ -30,12 +30,66 @@ window.addEventListener('load', function() {
     
     // Add click event listener to extract member data
     importButton.addEventListener('click', function() {
-      extractAndSaveMembers();
+      showScrollWarning();
     });
     
     document.body.appendChild(importButton);
   }
 });
+
+function showScrollWarning() {
+  // Create warning dialog
+  const warningDialog = document.createElement('div');
+  warningDialog.id = 'scroll-warning-dialog';
+  warningDialog.style.position = 'fixed';
+  warningDialog.style.top = '50%';
+  warningDialog.style.left = '50%';
+  warningDialog.style.transform = 'translate(-50%, -50%)';
+  warningDialog.style.zIndex = '10000';
+  warningDialog.style.backgroundColor = 'white';
+  warningDialog.style.padding = '20px';
+  warningDialog.style.borderRadius = '8px';
+  warningDialog.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+  warningDialog.style.maxWidth = '400px';
+  warningDialog.style.width = '90%';
+  
+  // Add warning content
+  warningDialog.innerHTML = `
+    <h3 style="margin-top: 0; color: #d93025;">Important: Scroll Required</h3>
+    <p>To import all members, you must first scroll to the bottom of the page to load all member data.</p>
+    <p>Please scroll to the bottom of the page and then click "Import Members" to ensure all members are included.</p>
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+      <button id="cancel-import" style="padding: 8px 16px; background-color: #f1f3f4; border: none; border-radius: 4px; cursor: pointer;">Cancel</button>
+      <button id="confirm-import" style="padding: 8px 16px; background-color: #34a853; color: white; border: none; border-radius: 4px; cursor: pointer;">Import Members</button>
+    </div>
+  `;
+  
+  // Add overlay
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.right = '0';
+  overlay.style.bottom = '0';
+  overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+  overlay.style.zIndex = '9999';
+  
+  // Add elements to page
+  document.body.appendChild(overlay);
+  document.body.appendChild(warningDialog);
+  
+  // Add event listeners
+  document.getElementById('cancel-import').addEventListener('click', function() {
+    warningDialog.remove();
+    overlay.remove();
+  });
+  
+  document.getElementById('confirm-import').addEventListener('click', function() {
+    warningDialog.remove();
+    overlay.remove();
+    extractAndSaveMembers();
+  });
+}
 
 function extractAndSaveMembers() {
   // Create a status message element
@@ -58,16 +112,17 @@ function extractAndSaveMembers() {
   statusMessage.textContent = 'Extracting member data...';
   
   try {
-    // 1. Select all the specific anchor tags containing member profiles
-    const memberLinks = document.querySelectorAll('a[href^="/records/member-profile/"]');
+    // 1. Select all member-card elements
+    const memberCards = document.querySelectorAll('member-card');
     
-    // 2. Initialize an array to store the parsed names
+    // 2. Initialize an array to store the parsed names and a Set for duplicate checking
     const members = [];
+    const uniqueMembers = new Set();
     
-    // 3. Loop through each link
-    memberLinks.forEach(link => {
-      // 4. Find the specific span inside the link
-      const nameSpan = link.querySelector('span.ng-binding');
+    // 3. Loop through each member card
+    memberCards.forEach(card => {
+      // 4. Find the span with the name inside the card
+      const nameSpan = card.querySelector('span.ng-binding');
     
       // 5. If a span is found, process its text content
       if (nameSpan) {
@@ -82,11 +137,17 @@ function extractAndSaveMembers() {
             const firstParts = parts[1].trim().split(' ');
             const firstName = firstParts[0].trim();
             
-            // Add to our members array as an object with firstName and lastName properties
-            members.push({
-              firstName: firstName,
-              lastName: lastName
-            });
+            // Create a unique key for this member
+            const memberKey = `${firstName.toLowerCase()}_${lastName.toLowerCase()}`;
+            
+            // Only add if we haven't seen this member before
+            if (!uniqueMembers.has(memberKey)) {
+              uniqueMembers.add(memberKey);
+              members.push({
+                firstName: firstName,
+                lastName: lastName
+              });
+            }
           }
         }
       }
@@ -95,7 +156,7 @@ function extractAndSaveMembers() {
     // 6. Save the results to Chrome storage
     if (members.length > 0) {
       chrome.storage.local.set({ 'members': members }, function() {
-        statusMessage.textContent = `Successfully imported ${members.length} members! Data is ready for use in the Sex Offender Registry Checker.`;
+        statusMessage.textContent = `Successfully imported ${members.length} unique members! Data is ready for use in the Sex Offender Registry Checker.`;
         
         // Show a sample of imported names
         if (members.length > 0) {
@@ -117,7 +178,7 @@ function extractAndSaveMembers() {
         }
         
         // Log to console for debugging
-        console.log("Found members:", members.length);
+        console.log("Found unique members:", members.length);
         console.log(members);
       });
     } else {
