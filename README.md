@@ -57,3 +57,6 @@ The extension can import member data directly from LCR or use the `members.json`
 - Uses Chrome's storage API to temporarily store member data and results
 - Content scripts interact with registry websites to perform searches
 - Background service worker manages search operations and data storage 
+
+## Last Updated
+- Repository last updated: April 2025 
