@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function() {
+Total raw 'search_*' records found in storage: 3document.addEventListener('DOMContentLoaded', function() {
     const searchForm = document.getElementById('searchForm');
     const searchButton = document.getElementById('searchButton');
     const loadingIndicator = document.getElementById('loadingIndicator');

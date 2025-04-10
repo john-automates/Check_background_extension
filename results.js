@@ -91,13 +91,8 @@ function startBatchCertification() {
       return;
     }
     
-    // Limit to 3 members for initial testing
-    if (certificationQueue.length > 3) {
-      certificationQueue = certificationQueue.slice(0, 3);
-      alert(`Found ${certificationQueue.length} members for certification. Starting with first 3.`);
-    } else {
-      alert(`Found ${certificationQueue.length} members for certification. Starting process.`);
-    }
+    // Inform the user how many members will be processed
+    alert(`Found ${certificationQueue.length} members for certification. Starting process for all.`);
     
     // Store the batch processing state for certification module to access
     chrome.storage.local.set({ 'isBatchProcessing': true }, () => {
