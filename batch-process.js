@@ -309,6 +309,7 @@ function processNextMember() {
         'advancedSearchParams': {
           firstName: member.firstName,
           lastName: member.lastName,
+          age: member.age,
           searchType: 'batch',
           batchIndex: currentMemberIndex,
           totalMembers: membersList.length,

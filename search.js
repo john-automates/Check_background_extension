@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Current search results to be confirmed
     let currentSearchResults = null;
+    let currentMemberAge = null; // Variable to store age if provided
 
     // Search parameters for potential retry
     let lastSearchParams = null;
@@ -70,15 +71,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Show batch processing info
                 batchInfoContainer.style.display = 'block';
                 document.getElementById('currentBatchMember').textContent = 
-                    `${data.advancedSearchParams.firstName} ${data.advancedSearchParams.lastName}`;
+                    `${data.advancedSearchParams.firstName} ${data.advancedSearchParams.lastName}` + 
+                    (data.advancedSearchParams.age ? ` (Age: ${data.advancedSearchParams.age})` : ''); // Display age
                 document.getElementById('batchProgress').textContent = 
                     `${data.advancedSearchParams.batchIndex + 1} of ${data.advancedSearchParams.totalMembers}`;
+                // Store age if provided
+                if (data.advancedSearchParams.age) {
+                    currentMemberAge = data.advancedSearchParams.age;
+                }
             }
             
             // Store search parameters for potential retry
             lastSearchParams = {
                 firstName: data.advancedSearchParams.firstName,
                 lastName: data.advancedSearchParams.lastName,
+                age: data.advancedSearchParams.age, // Store age in lastSearchParams
                 searchType: data.advancedSearchParams.searchType,
                 batchIndex: data.advancedSearchParams.batchIndex,
                 totalMembers: data.advancedSearchParams.totalMembers,
@@ -351,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     nsopw: nsopwResults,
                     ucaor: ucaorResults,
                     searchedName: standardizedName,
+                    age: currentMemberAge, // Add age to the results object
                     confirmed: false
                 };
                 

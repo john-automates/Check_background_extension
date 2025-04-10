@@ -109,25 +109,39 @@ function extractAndSaveMembers() {
     document.body.appendChild(statusMessage);
   }
   
-  statusMessage.textContent = 'Extracting member data...';
+  statusMessage.textContent = 'Extracting member data (Adults 18+)...';
   
   try {
-    // 1. Select all member-card elements
+    // 1. Select all member-card elements (these are within table rows)
     const memberCards = document.querySelectorAll('member-card');
     
-    // 2. Initialize an array to store the parsed names and a Set for duplicate checking
+    // 2. Initialize an array to store the parsed names and age, and a Set for duplicate checking
     const members = [];
     const uniqueMembers = new Set();
     
     // 3. Loop through each member card
     memberCards.forEach(card => {
+      // Find the containing table row (<tr>) for the member card
+      const row = card.closest('tr');
+      if (!row) {
+        console.warn('Could not find parent row for member card:', card);
+        return; // Skip if row not found
+      }
+
       // 4. Find the span with the name inside the card
       const nameSpan = card.querySelector('span.ng-binding');
-    
-      // 5. If a span is found, process its text content
-      if (nameSpan) {
+      
+      // 5. Find the table cell (<td>) containing the age
+      const ageCell = row.querySelector('td.age');
+      
+      // 6. If name span and age cell are found, process the data
+      if (nameSpan && ageCell) {
         const fullName = nameSpan.textContent.trim();
-        if (fullName) { // Process only if the name is not empty after trimming
+        const ageText = ageCell.textContent.trim();
+        const age = parseInt(ageText, 10); // Parse age as an integer
+
+        // Check if age is a valid number and 18 or older
+        if (fullName && !isNaN(age) && age >= 18) { 
           // Parse the name which is in format "Last, First Middle"
           const parts = fullName.split(',');
           
@@ -145,29 +159,37 @@ function extractAndSaveMembers() {
               uniqueMembers.add(memberKey);
               members.push({
                 firstName: firstName,
-                lastName: lastName
+                lastName: lastName,
+                age: age // Store the age
               });
             }
           }
+        } else if (fullName && isNaN(age)) {
+            console.warn(`Could not parse age for member: ${fullName}. Age text: ${ageText}`);
         }
+        // Members under 18 or with invalid age are skipped
+      } else if (!nameSpan) {
+          console.warn('Could not find name span in row:', row);
+      } else if (!ageCell) {
+          console.warn('Could not find age cell in row:', row);
       }
     });
     
-    // 6. Save the results to Chrome storage
+    // 7. Save the results (only adults 18+) to Chrome storage
     if (members.length > 0) {
       chrome.storage.local.set({ 'members': members }, function() {
-        statusMessage.textContent = `Successfully imported ${members.length} unique members! Data is ready for use in the Sex Offender Registry Checker.`;
+        statusMessage.textContent = `Successfully imported ${members.length} unique adult members (18+)! Data is ready for use.`;
         
-        // Show a sample of imported names
+        // Show a sample of imported names and ages
         if (members.length > 0) {
           const sampleList = document.createElement('div');
           sampleList.style.marginTop = '10px';
           sampleList.style.fontSize = '12px';
           
           const sampleSize = Math.min(5, members.length);
-          let sampleHTML = '<strong>Sample of imported names:</strong><br>';
+          let sampleHTML = '<strong>Sample of imported adult members:</strong><br>';
           for (let i = 0; i < sampleSize; i++) {
-            sampleHTML += `${members[i].firstName} ${members[i].lastName}<br>`;
+            sampleHTML += `${members[i].firstName} ${members[i].lastName} (Age: ${members[i].age})<br>`;
           }
           if (members.length > sampleSize) {
             sampleHTML += `... and ${members.length - sampleSize} more`;
@@ -178,11 +200,11 @@ function extractAndSaveMembers() {
         }
         
         // Log to console for debugging
-        console.log("Found unique members:", members.length);
+        console.log("Found unique adult members (18+):", members.length);
         console.log(members);
       });
     } else {
-      statusMessage.textContent = 'No member data found. Please make sure the page is fully loaded.';
+      statusMessage.textContent = 'No adult member data (18+) found or extracted. Please ensure the page is fully loaded and members are displayed.';
     }
   } catch (error) {
     statusMessage.textContent = 'Error extracting member data: ' + error.message;

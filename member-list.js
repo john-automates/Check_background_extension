@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear list and empty state
         membersList.innerHTML = '';
         
-        // Sort the members alphabetically by last name
+        // Sort the members alphabetically by last name, then first name
         const sortedMembers = [...data.members].sort((a, b) => 
           a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)
         );
@@ -58,10 +58,16 @@ document.addEventListener('DOMContentLoaded', function() {
           const firstNameCell = document.createElement('div');
           firstNameCell.textContent = member.firstName;
           
+          // Create the age cell
+          const ageCell = document.createElement('div');
+          // Ensure age exists before displaying
+          ageCell.textContent = member.age !== undefined ? member.age : 'N/A'; 
+          
           // Add cells to the row
           memberItem.appendChild(numberCell);
           memberItem.appendChild(lastNameCell);
           memberItem.appendChild(firstNameCell);
+          memberItem.appendChild(ageCell); // Add the age cell
           
           // Add row to the list
           membersList.appendChild(memberItem);

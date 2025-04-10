@@ -41,7 +41,8 @@
         "member-list.html",
         "search.html",
         "results.html",
-        "batch-process.html"
+        "batch-process.html",
+        "certification.js"
       ],
       "matches": ["<all_urls>"]
     }

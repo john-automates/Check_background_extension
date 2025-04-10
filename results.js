@@ -1,3 +1,6 @@
+// Import the certification functionality from the certification module
+import { giveUserCertification, closeAllCertificationTabs } from './certification.js';
+
 // Function to format date
 function formatDate(dateString) {
   const date = new Date(dateString);
@@ -9,6 +12,11 @@ function formatDate(dateString) {
     minute: '2-digit'
   });
 }
+
+// Batch certification queue and state
+let certificationQueue = [];
+let isBatchProcessing = false;
+let currentTabId = null;
 
 // Function to open search page for a member
 function reSearchMember(firstName, lastName) {
@@ -39,6 +47,183 @@ function reSearchMember(firstName, lastName) {
         
         // Remove this listener to prevent memory leaks
         chrome.tabs.onRemoved.removeListener(onTabClose);
+      }
+    });
+  });
+}
+
+// Function to start batch certification
+function startBatchCertification() {
+  // Get all eligible members (with 'Pending' or 'Failed' certification status)
+  chrome.storage.local.get(null, function(data) {
+    // Reset the queue and state
+    certificationQueue = [];
+    isBatchProcessing = false;
+    
+    // Collect all eligible members for certification
+    for (let key in data) {
+      if (key.startsWith('search_')) {
+        const result = data[key];
+        const certificationStatus = result.certificationStatus || 'Pending';
+        const isConfirmed = result.confirmed || false;
+        
+        // Only process members that are confirmed NO MATCH and not already certified
+        if (isConfirmed && !result.confirmed.positiveMatch && 
+            (certificationStatus === 'Pending' || certificationStatus.startsWith('Failed'))) {
+          
+          // Extract name parts
+          let nameParts = result.searchedName.split(' ');
+          let firstName = nameParts[0] || '';
+          let lastName = nameParts.slice(1).join(' ') || '';
+          
+          // Add to queue
+          certificationQueue.push({
+            firstName,
+            lastName,
+            timestamp: result.timestamp
+          });
+        }
+      }
+    }
+    
+    if (certificationQueue.length === 0) {
+      alert('No members found that need certification.');
+      return;
+    }
+    
+    // Limit to 3 members for initial testing
+    if (certificationQueue.length > 3) {
+      certificationQueue = certificationQueue.slice(0, 3);
+      alert(`Found ${certificationQueue.length} members for certification. Starting with first 3.`);
+    } else {
+      alert(`Found ${certificationQueue.length} members for certification. Starting process.`);
+    }
+    
+    // Store the batch processing state for certification module to access
+    chrome.storage.local.set({ 'isBatchProcessing': true }, () => {
+      // Start the batch process
+      isBatchProcessing = true;
+      processBatchCertification();
+    });
+  });
+}
+
+// Process the certification queue
+function processBatchCertification() {
+  if (!isBatchProcessing || certificationQueue.length === 0) {
+    if (isBatchProcessing) {
+      // Clean up batch state
+      chrome.storage.local.remove('isBatchProcessing', () => {
+        alert('Batch certification complete!');
+        isBatchProcessing = false;
+      });
+    }
+    return;
+  }
+  
+  // Close any existing certification tab
+  if (currentTabId) {
+    chrome.tabs.remove(currentTabId, () => {
+      currentTabId = null;
+      // Continue with next member after a delay
+      setTimeout(processBatchCertification, 500);
+    });
+    return;
+  }
+  
+  // Get next member from queue
+  const nextMember = certificationQueue.shift();
+  
+  // Set up listener for certification completion
+  const certificationListener = function(message, sender, sendResponse) {
+    if (message.action === 'certificationStatusUpdate') {
+      console.log('Received certification status update during batch process:', message);
+      
+      if (message.status === 'Added' || message.status === 'Exists') {
+        console.log('Certification successful for current member, moving to next');
+        
+        // Add delay before proceeding
+        setTimeout(() => {
+          // Clean up any LCR tabs first
+          closeAllCertificationTabs();
+          
+          // Now close the main certification tab
+          if (currentTabId) {
+            chrome.tabs.remove(currentTabId, () => {
+              currentTabId = null;
+              // Remove this listener
+              chrome.runtime.onMessage.removeListener(certificationListener);
+              // Continue with next member after a delay
+              setTimeout(processBatchCertification, 1000);
+            });
+          } else {
+            // Just in case tab ID is missing, continue anyway
+            chrome.runtime.onMessage.removeListener(certificationListener);
+            setTimeout(processBatchCertification, 1000);
+          }
+        }, 2000);
+      } else if (message.status.startsWith('Failed')) {
+        console.log('Certification failed for current member, will retry later');
+        // Move failed member to end of queue (for retry)
+        certificationQueue.push(nextMember);
+        
+        // Clean up any LCR tabs first
+        closeAllCertificationTabs();
+        
+        // Now close the main certification tab and continue
+        setTimeout(() => {
+          if (currentTabId) {
+            chrome.tabs.remove(currentTabId, () => {
+              currentTabId = null;
+              // Remove this listener
+              chrome.runtime.onMessage.removeListener(certificationListener);
+              // Continue with next member after a delay
+              setTimeout(processBatchCertification, 1000);
+            });
+          } else {
+            // Just in case tab ID is missing, continue anyway
+            chrome.runtime.onMessage.removeListener(certificationListener);
+            setTimeout(processBatchCertification, 1000);
+          }
+        }, 2000);
+      }
+      
+      sendResponse({ received: true });
+    } else if (message.action === 'closeCertificationTabs') {
+      // Close all open LCR tabs from certification process
+      closeAllCertificationTabs();
+      sendResponse({ received: true });
+    }
+    return true; // Keep channel open for async response
+  };
+  
+  // Register the listener
+  chrome.runtime.onMessage.addListener(certificationListener);
+  
+  // Start certification for this member
+  console.log(`Starting certification for ${nextMember.firstName} ${nextMember.lastName}`);
+  
+  // Create a tab for this certification
+  chrome.tabs.create({
+    url: chrome.runtime.getURL('blank.html'), // Just a blank page to start
+    active: true
+  }, function(tab) {
+    currentTabId = tab.id;
+    
+    // Need to do this on tab load
+    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+      if (tabId === tab.id && changeInfo.status === 'complete') {
+        // Remove this listener
+        chrome.tabs.onUpdated.removeListener(listener);
+        
+        // Start the certification process
+        setTimeout(() => {
+          giveUserCertification(
+            nextMember.firstName, 
+            nextMember.lastName, 
+            nextMember.timestamp
+          );
+        }, 500);
       }
     });
   });
@@ -136,6 +321,9 @@ function loadResults() {
         const researchIndicator = isResearch ? 
           '<span class="research-indicator" title="This member was re-searched">↻</span> ' : '';
         
+        // Display age if available
+        const ageDisplay = result.age ? ` (Age: ${result.age})` : '';
+        
         // Extract first and last name for re-search button
         let nameParts = result.searchedName.split(' ');
         let firstName = nameParts[0] || '';
@@ -143,19 +331,44 @@ function loadResults() {
         
         // Format name for data attribute - will be used by event handler
         const nameData = `data-firstname="${firstName}" data-lastname="${lastName}"`;
+        // Add timestamp data attribute to identify the specific search record
+        const timestampData = `data-timestamp="${result.timestamp}"`;
         
+        // Get certification status, default to 'Pending' if not set
+        const certificationStatus = result.certificationStatus || 'Pending';
+        let certificationStatusText = certificationStatus;
+        let certificationButtonDisabled = false;
+        
+        // Customize display and button state based on status
+        if (certificationStatus === 'Added' || certificationStatus === 'Exists') {
+          certificationStatusText = `✓ ${certificationStatus}`;
+          certificationButtonDisabled = true;
+        } else if (certificationStatus.startsWith('Failed')) {
+          certificationStatusText = `✗ ${certificationStatus}`;
+          // Keep button enabled for retry
+        }
+
         return `
           <tr ${isResearch ? 'class="researched-row"' : ''}>
-            <td>${researchIndicator}${result.searchedName}</td>
+            <td>${researchIndicator}${result.searchedName}${ageDisplay}</td>
             <td>${searchType}</td>
             <td>${combinedResultText}</td>
             <td>${formatDate(result.timestamp)}</td>
             <td class="${isConfirmed ? 'status-confirmed' : 'status-pending'}">
               ${confirmationText}
             </td>
+            <td>${certificationStatusText}</td>
             <td>
               <button class="action-button research-button researchBtn" ${nameData}>
                 Re-Search
+              </button>
+              <button 
+                class="action-button certification-button certifyBtn" 
+                ${nameData} 
+                ${timestampData}
+                ${certificationButtonDisabled ? 'disabled' : ''}
+              >
+                ${certificationButtonDisabled ? 'Certified' : 'Give Certification'}
               </button>
             </td>
           </tr>
@@ -168,6 +381,16 @@ function loadResults() {
           const firstName = this.getAttribute('data-firstname');
           const lastName = this.getAttribute('data-lastname');
           reSearchMember(firstName, lastName);
+        });
+      });
+      
+      // Add event listeners to certification buttons
+      document.querySelectorAll('.certifyBtn').forEach(button => {
+        button.addEventListener('click', function() {
+          const firstName = this.getAttribute('data-firstname');
+          const lastName = this.getAttribute('data-lastname');
+          const timestamp = this.getAttribute('data-timestamp'); // Get the timestamp
+          giveUserCertification(firstName, lastName, timestamp); // Pass timestamp
         });
       });
     }
@@ -241,10 +464,26 @@ function setupClearDataButton() {
   });
 }
 
+// Setup batch certification button
+function setupBatchCertificationButton() {
+  const batchCertifyButton = document.getElementById('batchCertifyButton');
+  
+  if (batchCertifyButton) {
+    batchCertifyButton.addEventListener('click', function() {
+      if (isBatchProcessing) {
+        alert('Batch certification is already in progress.');
+        return;
+      }
+      startBatchCertification();
+    });
+  }
+}
+
 // Load results when the page loads
 document.addEventListener('DOMContentLoaded', function() {
   loadResults();
   setupClearDataButton();
+  setupBatchCertificationButton();
   
   // Listen for search confirmations from other tabs
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -252,10 +491,49 @@ document.addEventListener('DOMContentLoaded', function() {
       // Refresh results when a search is confirmed
       loadResults();
       sendResponse({ received: true });
+    } else if (message.action === 'certificationStatusUpdate') {
+      // Handle status updates from the certification process
+      console.log('Received certification status update:', message);
+      updateStoredCertificationStatus(message.timestamp, message.status, message.details);
+      sendResponse({ received: true });
     }
-    return true;
+    return true; // Keep the message channel open for asynchronous response
   });
 });
+
+// Function to update the certification status in storage
+function updateStoredCertificationStatus(timestamp, status, details) {
+  chrome.storage.local.get(null, function(data) {
+    let recordKey = null;
+    // Find the key corresponding to the timestamp
+    for (let key in data) {
+      if (key.startsWith('search_') && data[key].timestamp === timestamp) {
+        recordKey = key;
+        break;
+      }
+    }
+
+    if (recordKey) {
+      let updatedRecord = { ...data[recordKey], certificationStatus: status };
+      if (details) {
+        updatedRecord.certificationDetails = details; // Store failure details if provided
+      }
+      
+      // Save the updated record
+      chrome.storage.local.set({ [recordKey]: updatedRecord }, function() {
+        if (chrome.runtime.lastError) {
+          console.error("Error updating certification status:", chrome.runtime.lastError);
+        } else {
+          console.log(`Certification status updated for ${recordKey} to ${status}`);
+          // Optionally, reload results immediately to reflect the change
+          loadResults(); 
+        }
+      });
+    } else {
+      console.error('Could not find search record to update status for timestamp:', timestamp);
+    }
+  });
+}
 
 // Listen for storage changes and reload results
 chrome.storage.onChanged.addListener(function(changes, namespace) {
