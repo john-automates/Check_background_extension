@@ -1,4 +1,4 @@
-Total raw 'search_*' records found in storage: 3document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function() {
     const searchForm = document.getElementById('searchForm');
     const searchButton = document.getElementById('searchButton');
     const loadingIndicator = document.getElementById('loadingIndicator');
@@ -100,8 +100,25 @@ Total raw 'search_*' records found in storage: 3document.addEventListener('DOMCo
             if (data.advancedSearchParams.firstName && data.advancedSearchParams.lastName) {
                 // Small delay to ensure everything is loaded
                 setTimeout(() => {
+                    // --- Add Logging START ---
+                    console.log("Attempting auto search for:", data.advancedSearchParams.firstName, data.advancedSearchParams.lastName);
+                    console.log("AutoSearch flag:", data.advancedSearchParams.autoSearch);
+                    // --- Add Logging END ---
                     if (data.advancedSearchParams.autoSearch) {
-                        searchButton.click();
+                        // --- Add Try-Catch START ---
+                        try {
+                            console.log("Calling searchButton.click()");
+                            searchButton.click();
+                            console.log("searchButton.click() called successfully.");
+                        } catch (err) {
+                            console.error("Error clicking search button:", err);
+                            // Optionally display an error message to the user
+                            errorMessage.textContent = 'Error automatically starting search. Please click Search manually.';
+                            errorMessage.classList.add('visible');
+                        }
+                        // --- Add Try-Catch END ---
+                    } else {
+                        console.log("AutoSearch flag is false or missing, not clicking search.");
                     }
                 }, 500);
             }

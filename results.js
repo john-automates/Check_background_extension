@@ -71,17 +71,25 @@ function startBatchCertification() {
         if (isConfirmed && !result.confirmed.positiveMatch && 
             (certificationStatus === 'Pending' || certificationStatus.startsWith('Failed'))) {
           
-          // Extract name parts
+          // Extract name parts and age
           let nameParts = result.searchedName.split(' ');
           let firstName = nameParts[0] || '';
           let lastName = nameParts.slice(1).join(' ') || '';
+          let age = result.age ? parseInt(result.age, 10) : NaN; // Parse age, default to NaN if missing
           
-          // Add to queue
-          certificationQueue.push({
-            firstName,
-            lastName,
-            timestamp: result.timestamp
-          });
+          // Add to queue only if age is valid for lookup
+          if (!isNaN(age)) {
+            certificationQueue.push({
+              firstName,
+              lastName,
+              timestamp: result.timestamp,
+              age // Add age to the queue object
+            });
+          } else {
+            console.warn(`Skipping batch certification for ${firstName} ${lastName} due to missing or invalid age.`);
+            // Optionally update status immediately to indicate failure due to bad data
+            updateStoredCertificationStatus(result.timestamp, 'Failed', 'Invalid or missing age');
+          }
         }
       }
     }
@@ -128,6 +136,17 @@ function processBatchCertification() {
   
   // Get next member from queue
   const nextMember = certificationQueue.shift();
+  
+  // -- Add validation for age before proceeding --
+  if (isNaN(nextMember.age)) {
+      console.error(`Skipping certification for ${nextMember.firstName} ${nextMember.lastName} (Timestamp: ${nextMember.timestamp}) due to invalid age in queue.`);
+      // Update status to Failed
+      updateStoredCertificationStatus(nextMember.timestamp, 'Failed', 'Invalid age encountered during batch process');
+      // Skip to the next member immediately
+      setTimeout(processBatchCertification, 100); // Short delay before next
+      return; 
+  }
+  // -- End age validation --
   
   // Set up listener for certification completion
   const certificationListener = function(message, sender, sendResponse) {
@@ -216,7 +235,8 @@ function processBatchCertification() {
           giveUserCertification(
             nextMember.firstName, 
             nextMember.lastName, 
-            nextMember.timestamp
+            nextMember.timestamp,
+            nextMember.age // Pass the age here
           );
         }, 500);
       }
@@ -258,136 +278,108 @@ function loadResults() {
 
     // Function to display filtered results
     function displayResults(filtered = false) {
-      let resultsToShow = filtered ? uniqueResults.filter(result => 
-        result.searchedName.toLowerCase().includes(searchInput.value.toLowerCase())
-      ) : uniqueResults;
+      resultsTableBody.innerHTML = ''; // Clear existing rows
+      let displayedResults = 0;
 
-      if (resultsToShow.length === 0) {
-        resultsTableBody.innerHTML = `
-          <tr>
-            <td colspan="6" class="no-results">
-              ${filtered ? 'No results match your search.' : 'No results found. Start by checking some names.'}
-            </td>
-          </tr>
-        `;
-        return;
-      }
+      // Sort results by timestamp descending (most recent first)
+      const sortedKeys = Object.keys(data)
+        .filter(key => key.startsWith('search_'))
+        .sort((a, b) => new Date(data[b].timestamp) - new Date(data[a].timestamp));
 
-      resultsTableBody.innerHTML = resultsToShow.map(result => {
-        // Combine results from both NSOPW and UCAOR
-        let combinedResultText = '';
+      for (const key of sortedKeys) {
+        const result = data[key];
+        const searchTerm = searchInput.value.toLowerCase();
         
-        if (result.nsopw && result.ucaor) {
-          // This is a combined search from the new UI
-          const nsopwCount = result.nsopw.offenders ? result.nsopw.offenders.length : 0;
-          const ucaorCount = result.ucaor.offenderCount || 0;
-          
-          combinedResultText = `NSOPW: Found ${nsopwCount} offenders | UCAOR: ${result.ucaor.results}`;
-        } else if (result.results) {
-          // This is from the old UI
-          combinedResultText = result.results;
+        // Filter logic
+        if (filtered && !result.searchedName.toLowerCase().includes(searchTerm)) {
+          continue; // Skip if it doesn't match the search term
         }
-        
-        // Determine search type
-        let searchType = '';
-        if (result.nsopw && result.ucaor) {
-          searchType = 'Both Registries';
-        } else if (result.searchType) {
-          searchType = result.searchType;
+
+        displayedResults++;
+        const row = resultsTableBody.insertRow();
+        row.id = `result-${result.timestamp}`; // Add unique ID for updates
+
+        // Apply researched style if applicable
+        if (result.researchTimestamp) {
+          row.classList.add('researched-row');
         }
-        
-        // Check if result is confirmed by counselors
-        const isConfirmed = result.confirmed || false;
-        
-        // Check if a positive match was found (from the new checkbox)
-        let confirmationText = 'Pending confirmation';
-        if (isConfirmed) {
-          if (result.confirmed.positiveMatch) {
-            confirmationText = 'Confirmed MATCH by counselors';
-          } else {
-            confirmationText = 'Confirmed NO MATCH by counselors';
-          }
-        }
-        
-        // Check if this was a re-search
-        const isResearch = result.confirmed?.isResearch || false;
-        
-        // Add visual indicator for re-searched members
-        const researchIndicator = isResearch ? 
-          '<span class="research-indicator" title="This member was re-searched">↻</span> ' : '';
-        
-        // Display age if available
-        const ageDisplay = result.age ? ` (Age: ${result.age})` : '';
-        
-        // Extract first and last name for re-search button
+
+        // Extract name parts (handle cases with or without middle names)
         let nameParts = result.searchedName.split(' ');
-        let firstName = nameParts[0] || '';
-        let lastName = nameParts.slice(1).join(' ') || '';
-        
-        // Format name for data attribute - will be used by event handler
-        const nameData = `data-firstname="${firstName}" data-lastname="${lastName}"`;
-        // Add timestamp data attribute to identify the specific search record
-        const timestampData = `data-timestamp="${result.timestamp}"`;
-        
-        // Get certification status, default to 'Pending' if not set
-        const certificationStatus = result.certificationStatus || 'Pending';
-        let certificationStatusText = certificationStatus;
-        let certificationButtonDisabled = false;
-        
-        // Customize display and button state based on status
-        if (certificationStatus === 'Added' || certificationStatus === 'Exists') {
-          certificationStatusText = `✓ ${certificationStatus}`;
-          certificationButtonDisabled = true;
-        } else if (certificationStatus.startsWith('Failed')) {
-          certificationStatusText = `✗ ${certificationStatus}`;
-          // Keep button enabled for retry
-        }
+        let firstName = nameParts[0];
+        let lastName = nameParts.slice(1).join(' '); // Join remaining parts as last name
 
-        return `
-          <tr ${isResearch ? 'class="researched-row"' : ''}>
-            <td>${researchIndicator}${result.searchedName}${ageDisplay}</td>
-            <td>${searchType}</td>
-            <td>${combinedResultText}</td>
-            <td>${formatDate(result.timestamp)}</td>
-            <td class="${isConfirmed ? 'status-confirmed' : 'status-pending'}">
-              ${confirmationText}
-            </td>
-            <td>${certificationStatusText}</td>
-            <td>
-              <button class="action-button research-button researchBtn" ${nameData}>
-                Re-Search
-              </button>
-              <button 
-                class="action-button certification-button certifyBtn" 
-                ${nameData} 
-                ${timestampData}
-                ${certificationButtonDisabled ? 'disabled' : ''}
-              >
-                ${certificationButtonDisabled ? 'Certified' : 'Give Certification'}
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-      
-      // Add event listeners to re-search buttons
-      document.querySelectorAll('.researchBtn').forEach(button => {
-        button.addEventListener('click', function() {
-          const firstName = this.getAttribute('data-firstname');
-          const lastName = this.getAttribute('data-lastname');
-          reSearchMember(firstName, lastName);
-        });
-      });
-      
-      // Add event listeners to certification buttons
-      document.querySelectorAll('.certifyBtn').forEach(button => {
-        button.addEventListener('click', function() {
-          const firstName = this.getAttribute('data-firstname');
-          const lastName = this.getAttribute('data-lastname');
-          const timestamp = this.getAttribute('data-timestamp'); // Get the timestamp
-          giveUserCertification(firstName, lastName, timestamp); // Pass timestamp
-        });
-      });
+        // Cell 1: Name
+        row.insertCell(0).textContent = result.searchedName;
+
+        // Cell 2: Search Type
+        row.insertCell(1).textContent = result.searchType || 'N/A';
+
+        // Cell 3: Results
+        const resultsCell = row.insertCell(2);
+        if (result.researchTimestamp) {
+          const indicator = document.createElement('span');
+          indicator.className = 'research-indicator';
+          indicator.title = `Re-searched on ${formatDate(result.researchTimestamp)}`;
+          indicator.textContent = '🔄'; // Use an icon or symbol
+          resultsCell.appendChild(indicator);
+        }
+        resultsCell.appendChild(document.createTextNode(result.resultText || 'N/A'));
+
+
+        // Cell 4: Date Checked
+        row.insertCell(3).textContent = formatDate(result.timestamp);
+
+        // Cell 5: Confirmation Status
+        const confirmationCell = row.insertCell(4);
+        let confirmationStatusText = 'Pending';
+        if (result.confirmed) {
+          confirmationStatusText = result.confirmed.positiveMatch 
+            ? 'Confirmed MATCH by counselors' 
+            : 'Confirmed NO MATCH by counselors';
+          confirmationCell.classList.add('status-confirmed');
+          // Add specific class for confirmed match
+          if (result.confirmed.positiveMatch) {
+            confirmationCell.classList.add('status-confirmed-match'); 
+          }
+        } else {
+          confirmationCell.classList.add('status-pending');
+        }
+        confirmationCell.textContent = confirmationStatusText;
+
+        // Cell 6: Certification Status
+        const certificationCell = row.insertCell(5);
+        certificationCell.textContent = result.certificationStatus || 'Pending'; // Default to Pending if not set
+
+        // Cell 7: Actions
+        const actionsCell = row.insertCell(6);
+        // Add 'Re-Search' button
+        const researchButton = document.createElement('button');
+        researchButton.textContent = 'Re-Search';
+        researchButton.className = 'action-button research-button';
+        researchButton.onclick = () => reSearchMember(firstName, lastName);
+        actionsCell.appendChild(researchButton);
+        
+        // Add 'Certify' button if needed
+        const needsCertification = result.confirmed && !result.confirmed.positiveMatch &&
+                                  (!result.certificationStatus || result.certificationStatus === 'Pending' || result.certificationStatus.startsWith('Failed'));
+
+        if (needsCertification) {
+          const certifyButton = document.createElement('button');
+          certifyButton.textContent = 'Certify';
+          certifyButton.className = 'action-button certification-button';
+          certifyButton.onclick = () => {
+            // Parse age before calling certification
+            let age = result.age ? parseInt(result.age, 10) : NaN;
+            if (isNaN(age)) {
+                alert('Cannot certify: Member age is missing or invalid.');
+                return;
+            }
+            giveUserCertification(firstName, lastName, result.timestamp, age);
+          };
+          actionsCell.appendChild(certifyButton);
+        }
+      }
     }
 
     // Initial display

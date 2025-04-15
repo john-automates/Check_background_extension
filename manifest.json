@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Sex Offender Registry Checker",
-  "version": "1.0",
+  "name": "LCR Certification Registry Checker",
+  "version": "1.1.2",
   "description": "Check names against sex offender registries",
   "permissions": [
     "storage",
