@@ -8,7 +8,7 @@ let certificationTabs = [];
 let isBatchProcessing = false;
 
 // Function to look up member and get profile URL
-async function getMemberProfileLink(firstName, lastName, timestamp) {
+async function getMemberProfileLink(firstName, lastName, timestamp, age) {
   // Clear any previously tracked tabs for this new certification
   certificationTabs = [];
   
@@ -38,7 +38,7 @@ async function getMemberProfileLink(firstName, lastName, timestamp) {
           // Execute script in the context of the LCR page
           chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            function: function(firstName, lastName, originalTimestamp) {
+            function: function(firstName, lastName, originalTimestamp, targetAge) {
               // Add debug console logging
               console.log("%c Sex Offender Registry Certification Extension - Debug Mode", "background: #34a853; color: white; padding: 5px; border-radius: 3px;");
               
@@ -50,7 +50,7 @@ async function getMemberProfileLink(firstName, lastName, timestamp) {
                   // Generate a NEW timestamp for the API call
                   const apiTimestamp = Date.now(); 
                   
-                  console.log("Searching for member:", fullName);
+                  console.log(`Searching for member: ${fullName}, Age: ${targetAge}`);
                   
                   // Make the API request using the new timestamp
                   const apiUrl = `https://mltp-api.churchofjesuschrist.org/api/member-lookup?term=${encodedName}&timestamp=${apiTimestamp}`;
@@ -73,22 +73,52 @@ async function getMemberProfileLink(firstName, lastName, timestamp) {
                   console.log("Member data:", data);
                   
                   if (data && data.memberResults && data.memberResults.length > 0) {
-                    const uuid = data.memberResults[0].uuid;
-                    const profileUrl = `https://lcr.churchofjesuschrist.org/records/member-profile/${uuid}`;
-                    
-                    console.log("Navigating to profile:", profileUrl);
-                    
-                    // Store member info and the ORIGINAL timestamp in sessionStorage
-                    sessionStorage.setItem('certificationMemberName', fullName);
-                    sessionStorage.setItem('certificationMemberUuid', uuid);
-                    sessionStorage.setItem('certificationTimestamp', originalTimestamp); // Store the original one
-                    
-                    // Navigate to the profile page
-                    window.location.href = profileUrl;
-                    
-                    // This will run after navigation, so we need to set up handling for the new page
-                    // Set a flag in sessionStorage to trigger certification process after navigation
-                    sessionStorage.setItem('runCertificationProcess', 'true');
+                    // Filter results by age (+/- 1 year tolerance)
+                    const matchingMembers = data.memberResults.filter(member => 
+                      member.age >= targetAge - 1 && member.age <= targetAge + 1
+                    );
+
+                    console.log(`Found ${matchingMembers.length} member(s) matching age ${targetAge} (tolerance +/- 1 year).`);
+
+                    if (matchingMembers.length === 1) {
+                      const member = matchingMembers[0];
+                      const uuid = member.uuid;
+                      const profileUrl = `https://lcr.churchofjesuschrist.org/records/member-profile/${uuid}`;
+                      
+                      console.log(`Navigating to profile for ${member.nameFormats?.spokenPreferredLocal || fullName}:`, profileUrl);
+                      
+                      // Store member info and the ORIGINAL timestamp in sessionStorage
+                      sessionStorage.setItem('certificationMemberName', member.nameFormats?.spokenPreferredLocal || fullName);
+                      sessionStorage.setItem('certificationMemberUuid', uuid);
+                      sessionStorage.setItem('certificationTimestamp', originalTimestamp); // Store the original one
+                      
+                      // Navigate to the profile page
+                      window.location.href = profileUrl;
+                      
+                      // Set a flag in sessionStorage to trigger certification process after navigation
+                      sessionStorage.setItem('runCertificationProcess', 'true');
+                    } else if (matchingMembers.length > 1) {
+                       alert(`Multiple members found matching name "${fullName}" and age ${targetAge} (+/- 1 year). Cannot proceed automatically.`);
+                       console.warn("Multiple matching members found:", matchingMembers);
+                       // Signal completion with failure (ambiguous match)
+                       chrome.runtime.sendMessage({
+                         action: "certificationStatusUpdate",
+                         timestamp: originalTimestamp,
+                         status: "Failed",
+                         details: "Multiple members match name and age"
+                       });
+                    } else {
+                      // No members matched the age criteria
+                      alert(`No member found matching name "${fullName}" and age ${targetAge} (+/- 1 year). Found ${data.memberResults.length} total matches for the name.`);
+                      console.log("Original search results (name only):", data.memberResults);
+                      // Signal completion with failure
+                       chrome.runtime.sendMessage({
+                         action: "certificationStatusUpdate",
+                         timestamp: originalTimestamp,
+                         status: "Failed",
+                         details: "No member matched name and age"
+                       });
+                    }
                   } else {
                     alert(`No member found with name: ${fullName}`);
                     
@@ -114,7 +144,7 @@ async function getMemberProfileLink(firstName, lastName, timestamp) {
                 }
               }, 2000);  // Increased delay to 2 seconds to make sure page is fully loaded
             },
-            args: [firstName, lastName, timestamp]
+            args: [firstName, lastName, timestamp, age]
           });
           
           // Now set up a listener to run when the page navigates to the profile
@@ -651,14 +681,14 @@ function closeAllCertificationTabs() {
 }
 
 // Function to give certification to a user - public API
-function giveUserCertification(firstName, lastName, timestamp) {
+function giveUserCertification(firstName, lastName, timestamp, age) {
   // Store batch processing state for this certification
   chrome.storage.local.get('isBatchProcessing', (data) => {
     // Store the batch processing state in storage so it persists through navigation
     sessionStorage.setItem('isBatchProcessing', String(!!data.isBatchProcessing));
     
     // Start the certification process
-    getMemberProfileLink(firstName, lastName, timestamp);
+    getMemberProfileLink(firstName, lastName, timestamp, age);
   });
 }
 
